@@ -81,3 +81,11 @@ export const authenticators = sqliteTable(
     }),
   })
 )
+
+export const notes = sqliteTable("note", {
+  id: integer("id").primaryKey(),
+  content: text("content"),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+});

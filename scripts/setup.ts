@@ -122,14 +122,25 @@ async function createDatabaseAndConfigure() {
     // Run command to create a new database
     const creationOutput = executeCommand(`bunx wrangler d1 create ${dbName}`);
 
-    if (creationOutput === undefined || typeof creationOutput !== "string") {
+    if (typeof creationOutput === "object" && creationOutput.error) {
         console.log(
-            "\x1b[33mDatabase creation failed, maybe you have already created a database with that name. I'll try to find the database ID for you.\x1b[0m",
+            `\x1b[33mDatabase creation failed: ${creationOutput.message}. I'll try to find the database ID for you.\x1b[0m`,
         );
         const dbInfoOutput = executeCommand(`bunx wrangler d1 info ${dbName}`);
-        const getInfo = (dbInfoOutput as string).match(
-            /│ [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} │/i,
-        );
+        let getInfo: RegExpMatchArray | null;
+
+        if (typeof dbInfoOutput === "object" && dbInfoOutput.error) {
+            console.error(
+                `\x1b[31mError retrieving database info: ${dbInfoOutput.message}\x1b[0m`,
+            );
+            cancel("Operation cancelled.");
+            process.exit(1);
+        } else {
+            getInfo = (dbInfoOutput as string).match(
+                /│ [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} │/i,
+            );
+        }
+
         if (getInfo && getInfo.length === 1) {
             console.log(
                 "\x1b[33mFound it! The database ID is: ",
@@ -142,8 +153,9 @@ async function createDatabaseAndConfigure() {
                 "\x1b[31mSomething went wrong when initialising the database. Please try again.\x1b[0m",
             );
             cancel("Operation cancelled.");
+            process.exit(1); // Added exit here for clarity on failure
         }
-    } else {
+    } else if (typeof creationOutput === "string") {
         // Extract database ID from the output
         const matchResult = (creationOutput as string).match(
             /database_id = "(.*)"/,
@@ -153,7 +165,12 @@ async function createDatabaseAndConfigure() {
         } else {
             console.error("Failed to extract database ID from the output.");
             cancel("Operation cancelled.");
+            process.exit(1); // Added exit here for clarity on failure
         }
+    } else {
+        console.error("\x1b[31mUnexpected output from database creation command.\x1b[0m");
+        cancel("Operation cancelled.");
+        process.exit(1);
     }
 
     // Update wrangler.toml with database configuration
